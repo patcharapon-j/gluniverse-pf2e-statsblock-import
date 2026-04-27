@@ -1,0 +1,37 @@
+{
+  "id": "gluniverse-pf2e-statsblock-import",
+  "title": "GLUniverse PF2e Stat Block Importer",
+  "description": "Strict Markdown PF2e NPC stat block importer with validation, compendium matching, merge modes, actor export, expanded spell support, inline automation helpers, and LLM authoring reference.",
+  "version": "0.2.0",
+  "authors": [
+    {
+      "name": "GLUniverse"
+    }
+  ],
+  "compatibility": {
+    "minimum": "13.348",
+    "verified": "13.351",
+    "maximum": "13"
+  },
+  "relationships": {
+    "systems": [
+      {
+        "id": "pf2e",
+        "type": "system",
+        "compatibility": {
+          "minimum": "7.12.0",
+          "verified": "7.12.2"
+        }
+      }
+    ]
+  },
+  "esmodules": [
+    "scripts/importer.js"
+  ],
+  "styles": [
+    "styles/importer.css"
+  ],
+  "url": "https://github.com/patcharapon-j/gluniverse-pf2e-statsblock-import",
+  "manifest": "https://github.com/patcharapon-j/gluniverse-pf2e-statsblock-import/releases/latest/download/module.json",
+  "download": "https://github.com/patcharapon-j/gluniverse-pf2e-statsblock-import/releases/latest/download/gluniverse-pf2e-statsblock-import.zip"
+}

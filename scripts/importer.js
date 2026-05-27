@@ -94,7 +94,7 @@ class PF2EStatBlockImporter extends foundry.applications.api.ApplicationV2 {
 
   async _renderHTML() {
     const element = document.createElement("div");
-    element.className = "gluni-pf2e-importer";
+    element.className = "gluni-importer";
     element.innerHTML = this.#renderAppHtml();
     return element;
   }
@@ -128,63 +128,53 @@ class PF2EStatBlockImporter extends foundry.applications.api.ApplicationV2 {
     const actorOptions = actors.map((actor) => `<option value="${escapeHtml(actor.id)}">${escapeHtml(actor.name)}</option>`).join("");
     const modeOptions = Object.entries(IMPORT_MODES).map(([value, label]) => `<option value="${value}" ${this.#updateMode === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("");
     return `
-      <header class="gluni-import-hero">
-        <div>
-          <p class="gluni-eyebrow">GLUniverse PF2e Tools</p>
-          <h1>NPC Stat Block Importer</h1>
-          <p>Paste strict Markdown, validate PF2e data, then create, update, or export NPC actors.</p>
-        </div>
-        <div class="gluni-hero-badges">
-          <span>Foundry v13</span>
-          <span>PF2e</span>
-          <span>Markdown</span>
-        </div>
+      <header class="gluni-header">
+        <h1><i class="fa-solid fa-file-import"></i> PF2e NPC Stat Block Importer</h1>
+        <p class="gluni-subtitle">Paste strict Markdown, validate PF2e data, then create, update, or export NPC actors.</p>
       </header>
-      <section class="gluni-import-column">
-        <div class="gluni-panel gluni-source-panel">
-          <div class="gluni-panel-heading">
-            <div>
-              <h2>Source Markdown</h2>
-              <p>Use the strict stat block format for best automation.</p>
-            </div>
-          </div>
-          <textarea name="source" spellcheck="false" placeholder="Paste strict Markdown stat block here">${escapeHtml(this.#source)}</textarea>
-          <div class="gluni-import-actions">
+      <div class="gluni-body">
+        <section class="gluni-input">
+          <label class="gluni-field gluni-field-grow">
+            <span class="gluni-label">Source Markdown</span>
+            <textarea name="source" spellcheck="false" placeholder="Paste strict Markdown stat block here">${escapeHtml(this.#source)}</textarea>
+          </label>
+          <div class="gluni-actions">
             <button class="gluni-primary" type="button" data-action="parse"><i class="fa-solid fa-magnifying-glass-chart"></i> Parse Preview</button>
             <button type="button" data-action="sample"><i class="fa-solid fa-wand-magic-sparkles"></i> Load Sample</button>
           </div>
-        </div>
-        <div class="gluni-panel gluni-options-panel">
-          <label><span>Update mode</span><select name="updateMode">${modeOptions}</select></label>
-        </div>
-        <div class="gluni-panel">
+
+          <label class="gluni-field">
+            <span class="gluni-label">Update mode</span>
+            <select name="updateMode">${modeOptions}</select>
+          </label>
+
           <fieldset class="gluni-rule-helper">
             <legend>Rule Element Helper</legend>
-            <select name="ruleHelperType">
-              <option value="FlatModifier">FlatModifier</option>
-              <option value="RollOption">RollOption</option>
-              <option value="Aura">Aura</option>
-              <option value="Note">Note</option>
-              <option value="GrantItem">GrantItem</option>
-            </select>
-            <input type="text" name="ruleHelperSelector" placeholder="selector/domain/radius">
-            <input type="text" name="ruleHelperValue" placeholder="value/option/uuid/text">
-            <button type="button" data-action="insertRuleHelper">Insert RuleElement</button>
+            <div class="gluni-rule-grid">
+              <select name="ruleHelperType">
+                <option value="FlatModifier">FlatModifier</option>
+                <option value="RollOption">RollOption</option>
+                <option value="Aura">Aura</option>
+                <option value="Note">Note</option>
+                <option value="GrantItem">GrantItem</option>
+              </select>
+              <input type="text" name="ruleHelperSelector" placeholder="selector/domain/radius">
+              <input type="text" name="ruleHelperValue" placeholder="value/option/uuid/text">
+            </div>
+            <button type="button" data-action="insertRuleHelper"><i class="fa-solid fa-plus"></i> Insert Rule Element</button>
           </fieldset>
-        </div>
-        <div class="gluni-panel gluni-target-panel">
-          <div class="gluni-target-row">
+
+          <div class="gluni-actions gluni-target">
             <button class="gluni-primary" type="button" data-action="create" ${this.#parsed?.valid ? "" : "disabled"}><i class="fa-solid fa-plus"></i> Create NPC</button>
             <select name="targetActor">${actorOptions}</select>
-            <button type="button" data-action="update" ${this.#parsed?.valid ? "" : "disabled"}><i class="fa-solid fa-pen-to-square"></i> Update Selected</button>
-            <button type="button" data-action="export"><i class="fa-solid fa-file-export"></i> Export Selected</button>
+            <button type="button" data-action="update" ${this.#parsed?.valid ? "" : "disabled"}><i class="fa-solid fa-pen-to-square"></i> Update</button>
+            <button type="button" data-action="export"><i class="fa-solid fa-file-export"></i> Export</button>
           </div>
-        </div>
-        <p class="gluni-muted">Strict Markdown gives the importer enough structure to create PF2e NPC fields, melee attacks, action items, spellcasting entries, physical items, effects, auras, inline checks, inline damage, condition links, and explicit rule elements.</p>
-      </section>
-      <section class="gluni-preview-column">
-        <div class="gluni-preview">${renderPreview(this.#parsed, this.#validation)}</div>
-      </section>
+
+          <p class="gluni-hint">Strict Markdown lets the importer build PF2e NPC fields, strikes, actions, spellcasting entries, items, effects, auras, inline checks and damage, condition links, and explicit rule elements.</p>
+        </section>
+        <section class="gluni-preview">${renderPreview(this.#parsed, this.#validation)}</section>
+      </div>
     `;
   }
 
@@ -755,10 +745,10 @@ function itemKey(item) {
 }
 
 function buildSpellSlots(entry) {
-  const slots = Object.fromEntries(Array.from({ length: 12 }, (_value, rank) => [`slot${rank}`, { prepared: [], value: 0, max: 0 }]));
+  const slots = Object.fromEntries(Array.from({ length: 11 }, (_value, rank) => [`slot${rank}`, { prepared: [], value: 0, max: 0 }]));
   for (const spell of entry.spells) {
     if (!Number.isInteger(spell.level)) continue;
-    const rank = Math.min(11, Math.max(0, Number(spell.level) || 0));
+    const rank = Math.min(10, Math.max(0, Number(spell.level) || 0));
     const slot = slots[`slot${rank}`];
     const count = spell.slots ?? entry.slots[rank] ?? (entry.prepared === "prepared" ? 1 : 0);
     slot.max = Math.max(slot.max, count);
@@ -925,7 +915,7 @@ function parsePerception(value, npc) {
 function parseSenses(value) {
   return splitList(value).map((sense) => {
     const match = sense.match(/^(.+?)\s+(\d+)\s*(?:feet|ft\.?)/i);
-    return match ? { type: slugify(match[1]), acuity: "imprecise", range: Number(match[2]) } : { type: slugify(sense), acuity: "precise", range: null };
+    return match ? { type: slugify(match[1]), acuity: "imprecise", range: Number(match[2]) } : { type: slugify(sense), acuity: "precise" };
   });
 }
 
@@ -1166,8 +1156,10 @@ function parseFrequency(value) {
 function parseDuration(value) {
   const slug = slugify(value);
   if (["unlimited", "encounter"].includes(slug)) return { value: slug === "unlimited" ? -1 : 1, unit: slug, expiry: null, sustained: false };
-  const match = String(value).match(/(\d+)\s*(round|minute|hour|day|turn|rounds|minutes|hours|days|turns)/i);
-  return { value: Number(match?.[1] ?? 1), unit: slugify(match?.[2] ?? "round").replace(/s$/, ""), expiry: "turn-start", sustained: false };
+  const match = String(value).match(/(\d+)\s*(rounds?|minutes?|hours?|days?|turns?)/i);
+  const unitMap = { round: "rounds", turn: "rounds", minute: "minutes", hour: "hours", day: "days" };
+  const unit = unitMap[(match?.[2] ?? "round").toLowerCase().replace(/s$/, "")] ?? "rounds";
+  return { value: Number(match?.[1] ?? 1), unit, expiry: "turn-start", sustained: false };
 }
 
 function parseBadge(value) {

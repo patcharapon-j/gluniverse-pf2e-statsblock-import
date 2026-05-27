@@ -58,23 +58,24 @@ Hooks.once("ready", () => {
   };
 });
 
-Hooks.on("renderActorDirectory", (_app, html) => {
-  if (!game.user?.isGM || game.system.id !== "pf2e") return;
-  const root = html instanceof HTMLElement ? html : html?.[0];
-  if (!root) return;
-  let footer = root.querySelector(".directory-footer");
-  if (!footer) {
-    footer = document.createElement("footer");
-    footer.className = "directory-footer action-buttons flexrow";
-    root.append(footer);
-  }
-  if (footer.querySelector(".gluni-actor-directory-button")) return;
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "gluni-actor-directory-button";
-  button.innerHTML = '<i class="fa-solid fa-file-import"></i> Import PF2e NPC';
-  button.addEventListener("click", () => new PF2EStatBlockImporter().render({ force: true }));
-  footer.append(button);
+Hooks.on("getActorContextOptions", (_app, options) => {
+  options.push({
+    name: "Import PF2e Stat Block",
+    icon: '<i class="fa-solid fa-file-import"></i>',
+    condition: () => game.user?.isGM && game.system.id === "pf2e",
+    callback: (target) => {
+      const li = target instanceof HTMLElement ? target : target?.[0];
+      const actorId = li?.dataset.entryId ?? li?.dataset.documentId;
+      const actor = game.actors.get(actorId);
+      if (!actor || actor.type !== "npc") {
+        ui.notifications.warn("Stat block import targets NPC actors only.");
+        return;
+      }
+      const importer = new PF2EStatBlockImporter();
+      importer.setTargetActor(actor.id);
+      importer.render({ force: true });
+    }
+  });
 });
 
 class PF2EStatBlockImporter extends foundry.applications.api.ApplicationV2 {
@@ -97,6 +98,11 @@ class PF2EStatBlockImporter extends foundry.applications.api.ApplicationV2 {
   #parsed = null;
   #validation = null;
   #updateMode = "replaceMatching";
+  #targetActorId = null;
+
+  setTargetActor(actorId) {
+    this.#targetActorId = actorId;
+  }
 
   async _renderHTML() {
     const element = document.createElement("div");
@@ -131,7 +137,7 @@ class PF2EStatBlockImporter extends foundry.applications.api.ApplicationV2 {
 
   #renderAppHtml() {
     const actors = game.actors.filter((actor) => actor.type === "npc").sort((a, b) => a.name.localeCompare(b.name));
-    const actorOptions = actors.map((actor) => `<option value="${escapeHtml(actor.id)}">${escapeHtml(actor.name)}</option>`).join("");
+    const actorOptions = actors.map((actor) => `<option value="${escapeHtml(actor.id)}" ${this.#targetActorId === actor.id ? "selected" : ""}>${escapeHtml(actor.name)}</option>`).join("");
     const modeOptions = Object.entries(IMPORT_MODES).map(([value, label]) => `<option value="${value}" ${this.#updateMode === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("");
     return `
       <header class="gluni-header">

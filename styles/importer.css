@@ -325,7 +325,9 @@
 
 /* Actor directory button */
 .gluni-actor-directory-button {
-  margin: 0.25rem;
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0.25rem 0.25rem 0.25rem auto;
 }
 
 @media (max-width: 760px) {

@@ -1,6 +1,6 @@
 # GLUniverse PF2e Stat Block Importer
 
-Strict Markdown NPC stat block importer for Foundry VTT v13 and the Pathfinder Second Edition system.
+Strict Markdown NPC stat block importer for Foundry VTT v14 and the Pathfinder Second Edition system.
 
 ## Features
 
@@ -17,8 +17,8 @@ Strict Markdown NPC stat block importer for Foundry VTT v13 and the Pathfinder S
 
 ## Requirements
 
-- Foundry VTT v13
-- Pathfinder Second Edition system 7.12 or newer
+- Foundry VTT v14
+- Pathfinder Second Edition system 8.0 or newer
 
 ## Installation
 

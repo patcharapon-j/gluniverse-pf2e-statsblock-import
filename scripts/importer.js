@@ -135,7 +135,7 @@ class PF2EStatBlockImporter extends foundry.applications.api.ApplicationV2 {
           <p>Paste strict Markdown, validate PF2e data, then create, update, or export NPC actors.</p>
         </div>
         <div class="gluni-hero-badges">
-          <span>Foundry v13</span>
+          <span>Foundry v14</span>
           <span>PF2e</span>
           <span>Markdown</span>
         </div>

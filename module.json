@@ -2,16 +2,16 @@
   "id": "gluniverse-pf2e-statsblock-import",
   "title": "GLUniverse PF2e Stat Block Importer",
   "description": "Strict Markdown PF2e NPC stat block importer with validation, compendium matching, merge modes, actor export, expanded spell support, inline automation helpers, and LLM authoring reference.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "authors": [
     {
       "name": "GLUniverse"
     }
   ],
   "compatibility": {
-    "minimum": "13.348",
-    "verified": "13.351",
-    "maximum": "13"
+    "minimum": "14",
+    "verified": "14.362",
+    "maximum": "14"
   },
   "relationships": {
     "systems": [
@@ -19,8 +19,8 @@
         "id": "pf2e",
         "type": "system",
         "compatibility": {
-          "minimum": "7.12.0",
-          "verified": "7.12.2"
+          "minimum": "8.0.0",
+          "verified": "8.1.2"
         }
       }
     ]

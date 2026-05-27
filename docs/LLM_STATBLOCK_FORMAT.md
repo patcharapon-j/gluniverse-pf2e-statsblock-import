@@ -1,8 +1,35 @@
-# GLUniverse PF2e NPC Stat Block Import Format
+# GLUniverse PF2e Stat Block Import Format
 
-This file describes the strict Markdown format expected by the GLUniverse PF2e Stat Block Importer for Foundry VTT v13 and the PF2e system.
+This file describes the strict Markdown format expected by the GLUniverse PF2e Stat Block Importer for Foundry VTT v14 and the PF2e system.
 
-Use this format when asking an LLM to produce an importable NPC. Prefer explicit structured fields over prose. The importer can link checks, damage, conditions, spell compendium entries, action costs, attacks, effects, auras, and PF2e Rule Elements when the data is written in the expected sections. The importer also validates common PF2e slugs, reports compendium matches, supports several update/merge modes, and can export existing NPC actors back to this format.
+Use this format when asking an LLM to produce an importable NPC or hazard. Prefer explicit structured fields over prose. The importer can link checks, damage, conditions, spell compendium entries, action costs, attacks, effects, auras, and PF2e Rule Elements when the data is written in the expected sections. The importer also validates slugs against the installed PF2e system (damage types, conditions, traits, and Rule Element keys), reports compendium matches, supports several update/merge modes, and can export existing NPC and hazard actors back to this format.
+
+## NPC vs. Hazard
+
+The importer builds an NPC by default. It builds a **hazard** actor instead when any of the following is true:
+
+- A top-level `Type: hazard` (or `Kind: hazard`) field is present.
+- The `Traits` line includes `hazard`.
+- Any hazard-only field is present: `Stealth`, `Hardness`, `Disable`, `Routine`, or `Reset`.
+
+Hazard-only fields:
+
+- `Stealth: +X` — the hazard's Stealth modifier (and optional detail in parentheses).
+- `Hardness: N`
+- `Complexity: complex` or `simple` (defaults to simple).
+- `Disable:` — how the hazard is disabled (DC checks are auto-linked).
+- `Routine:` — the hazard's routine on its turn (complex hazards).
+- `Reset:` — how the hazard resets.
+
+Hazards may still use `## Attacks` and `## Actions` sections.
+
+## Loose / Published Stat Blocks
+
+You do not have to use this strict format. If the pasted text does **not** begin with a `# Heading`, the importer falls back to a "loose" reader that understands the standard published PF2e layout (Archives of Nethys / Monster Core text), e.g. lines like `Perception +13; darkvision`, `AC 22; Fort +15, Ref +12, Will +11`, `Melee [one-action] jaws +15 (magical, reach 10 feet), Damage 2d8+7 piercing`, and `Arcane Innate Spells DC 22; 2nd fireball; Cantrips (3rd) detect magic`. The loose reader works for both creatures and hazards. It is heuristic, so review the parsed preview before importing.
+
+## Token & Art
+
+On import the module sets a sensible prototype token: size-linked dimensions, hostile disposition (neutral for hazards), and enabled vision for creatures. If a same-named creature exists in a PF2e Actor compendium, its portrait and token art are reused automatically (unless you supply an explicit `Image:` path).
 
 ## Output Rules For LLMs
 

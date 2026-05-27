@@ -32,9 +32,40 @@ const SAVE_MAP = {
 };
 
 const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"];
+// Fallback lists used only when CONFIG.PF2E is unavailable (e.g. headless parse).
 const DAMAGE_TYPES = ["acid", "bleed", "bludgeoning", "cold", "electricity", "fire", "force", "mental", "piercing", "poison", "precision", "slashing", "sonic", "spirit", "vitality", "void"];
 const DAMAGE_CATEGORIES = ["persistent", "precision", "splash"];
 const CONDITION_WORDS = ["blinded", "broken", "clumsy", "concealed", "confused", "controlled", "dazzled", "deafened", "doomed", "drained", "dying", "encumbered", "enfeebled", "fascinated", "fatigued", "fleeing", "frightened", "grabbed", "hidden", "immobilized", "invisible", "off-guard", "paralyzed", "persistent-damage", "petrified", "prone", "quickened", "restrained", "sickened", "slowed", "stunned", "stupefied", "unconscious", "undetected", "unfriendly", "unnoticed", "wounded"];
+const RULE_KEY_FALLBACK = ["ActiveEffectLike", "AdjustDegreeOfSuccess", "AdjustModifier", "AdjustStrike", "Aura", "BaseSpeed", "ChoiceSet", "CreatureSize", "CriticalSpecialization", "DamageDice", "DamageAlteration", "DexterityModifierCap", "Sense", "FastHealing", "FlatModifier", "GrantItem", "Immunity", "ItemAlteration", "MartialProficiency", "MultipleAttackPenalty", "Note", "Resistance", "RollNote", "RollOption", "Strike", "Striking", "TempHP", "TokenImage", "TokenLight", "TokenMark", "Weakness", "WeaponPotency"];
+
+// Read enumerations from the live PF2e system config so validation tracks the
+// installed system version instead of drifting against hardcoded lists.
+function pf2eConfigKeys(path, fallback = []) {
+  const config = globalThis.CONFIG?.PF2E;
+  const target = String(path).split(".").reduce((acc, key) => (acc && typeof acc === "object" ? acc[key] : undefined), config);
+  const keys = target && typeof target === "object" ? Object.keys(target) : [];
+  return keys.length ? keys : fallback;
+}
+
+function getDamageTypeList() {
+  return pf2eConfigKeys("damageTypes", DAMAGE_TYPES);
+}
+
+function getDamageTypeSet() {
+  return new Set(getDamageTypeList().map(slugify));
+}
+
+function getConditionSlugs() {
+  const manager = globalThis.game?.pf2e?.ConditionManager;
+  if (Array.isArray(manager?.conditionsSlugs) && manager.conditionsSlugs.length) return manager.conditionsSlugs;
+  return pf2eConfigKeys("conditionTypes", CONDITION_WORDS);
+}
+
+function getRuleElementKeys() {
+  const all = globalThis.game?.pf2e?.RuleElements?.all;
+  const keys = all instanceof Map ? [...all.keys()] : (all && typeof all === "object" ? Object.keys(all) : []);
+  return new Set(keys.length ? keys : RULE_KEY_FALLBACK);
+}
 
 Hooks.once("init", () => {
   game.settings.registerMenu(MODULE_ID, "openImporter", {
@@ -67,8 +98,8 @@ Hooks.on("getActorContextOptions", (_app, options) => {
       const li = target instanceof HTMLElement ? target : target?.[0];
       const actorId = li?.dataset.entryId ?? li?.dataset.documentId;
       const actor = game.actors.get(actorId);
-      if (!actor || actor.type !== "npc") {
-        ui.notifications.warn("Stat block import targets NPC actors only.");
+      if (!actor || !["npc", "hazard"].includes(actor.type)) {
+        ui.notifications.warn("Stat block import targets NPC or hazard actors only.");
         return;
       }
       const importer = new PF2EStatBlockImporter();
@@ -136,7 +167,7 @@ class PF2EStatBlockImporter extends foundry.applications.api.ApplicationV2 {
   }
 
   #renderAppHtml() {
-    const actors = game.actors.filter((actor) => actor.type === "npc").sort((a, b) => a.name.localeCompare(b.name));
+    const actors = game.actors.filter((actor) => ["npc", "hazard"].includes(actor.type)).sort((a, b) => a.name.localeCompare(b.name));
     const actorOptions = actors.map((actor) => `<option value="${escapeHtml(actor.id)}" ${this.#targetActorId === actor.id ? "selected" : ""}>${escapeHtml(actor.name)}</option>`).join("");
     const modeOptions = Object.entries(IMPORT_MODES).map(([value, label]) => `<option value="${value}" ${this.#updateMode === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("");
     return `
@@ -199,43 +230,48 @@ class PF2EStatBlockImporter extends foundry.applications.api.ApplicationV2 {
   async #createActor() {
     if (!this.#requireParsed()) return;
     const folder = await getOrCreateFolder();
-    const actorData = buildActorSource(this.#parsed.npc, this.#source);
+    const actorData = await buildActorSource(this.#parsed.npc, this.#source);
     actorData.folder = folder?.id ?? null;
     const actor = await Actor.create(actorData, { renderSheet: false });
     await importItems(actor, this.#parsed.npc, { mode: "appendOnly" });
     await actor.sheet.render(true);
-    ui.notifications.info(`Created NPC: ${actor.name}`);
+    ui.notifications.info(`Created ${actor.type === "hazard" ? "hazard" : "NPC"}: ${actor.name}`);
   }
 
   async #updateActor() {
     if (!this.#requireParsed()) return;
     const actorId = this.element.querySelector("select[name='targetActor']")?.value;
     const actor = game.actors.get(actorId);
-    if (!actor || actor.type !== "npc") {
-      ui.notifications.warn("Select an existing NPC actor to update.");
+    if (!actor || !["npc", "hazard"].includes(actor.type)) {
+      ui.notifications.warn("Select an existing NPC or hazard actor to update.");
+      return;
+    }
+    if (actor.type !== resolveActorType(this.#parsed.npc)) {
+      ui.notifications.warn(`Parsed stat block is a ${resolveActorType(this.#parsed.npc)}; cannot update a ${actor.type} actor.`);
       return;
     }
     if (this.#updateMode !== "itemsOnly") {
-      const actorData = buildActorSource(this.#parsed.npc, this.#source);
+      const actorData = await buildActorSource(this.#parsed.npc, this.#source);
       delete actorData.name;
       delete actorData.type;
+      delete actorData.prototypeToken;
       await actor.update(actorData);
     }
     if (this.#updateMode !== "coreOnly") await importItems(actor, this.#parsed.npc, { mode: this.#updateMode });
     await actor.sheet.render(true);
-    ui.notifications.info(`Updated NPC: ${actor.name}`);
+    ui.notifications.info(`Updated ${actor.type}: ${actor.name}`);
   }
 
   async #exportSelectedActor() {
     const actorId = this.element.querySelector("select[name='targetActor']")?.value;
     const actor = game.actors.get(actorId);
-    if (!actor || actor.type !== "npc") {
-      ui.notifications.warn("Select an existing NPC actor to export.");
+    if (!actor || !["npc", "hazard"].includes(actor.type)) {
+      ui.notifications.warn("Select an existing NPC or hazard actor to export.");
       return;
     }
     this.#source = exportActorToMarkdown(actor);
     await this.#parseAndRender();
-    ui.notifications.info(`Exported NPC: ${actor.name}`);
+    ui.notifications.info(`Exported ${actor.type}: ${actor.name}`);
   }
 
   #insertRuleHelper() {
@@ -271,7 +307,9 @@ function parseStrictMarkdown(source) {
   const npc = createEmptyNpc();
   const warnings = [];
   const errors = [];
-  const lines = String(source ?? "").replace(/\r\n?/g, "\n").split("\n");
+  const original = String(source ?? "");
+  const markdown = looksLikeStrictMarkdown(original) ? original : convertLooseToStrict(original, warnings);
+  const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
   let section = "core";
   let block = null;
   let multilineKey = null;
@@ -350,12 +388,15 @@ function parseStrictMarkdown(source) {
 function createEmptyNpc() {
   return {
     name: "",
+    kind: "npc",
     level: 1,
     rarity: "common",
     size: "med",
     traits: [],
     description: "",
-    image: "systems/pf2e/icons/default-icons/npc.svg",
+    image: "",
+    // Hazard-only fields (ignored for NPC actors).
+    hazard: { stealth: { value: 0, details: "" }, hardness: 0, complex: false, disable: "", routine: "", reset: "" },
     perception: { mod: 0, details: "", senses: [] },
     languages: { value: [], details: "" },
     skills: {},
@@ -393,6 +434,25 @@ function parseTopLevelField(section, key, value, npc, warnings) {
   }
   switch (slug) {
     case "name": npc.name = value.trim(); break;
+    case "kind": case "statblock": case "stat-block": {
+      const k = slugify(value);
+      if (k === "hazard") npc.kind = "hazard";
+      else if (["npc", "creature", "monster"].includes(k)) npc.kind = "npc";
+      break;
+    }
+    case "type": {
+      const k = slugify(value);
+      if (k === "hazard") npc.kind = "hazard";
+      else if (["npc", "creature", "monster"].includes(k)) npc.kind = "npc";
+      break;
+    }
+    case "stealth": npc.hazard.stealth = { value: parseSignedInt(value), details: value.replace(/^[-+]?\d+\s*;?\s*/i, "").trim() }; break;
+    case "hardness": npc.hazard.hardness = Math.max(0, parseSignedInt(value)); break;
+    case "complexity": npc.hazard.complex = /complex/i.test(value); break;
+    case "complex": npc.hazard.complex = /^(true|yes|complex|1)$/i.test(value.trim()); break;
+    case "disable": npc.hazard.disable = value.trim(); break;
+    case "routine": npc.hazard.routine = value.trim(); break;
+    case "reset": npc.hazard.reset = value.trim(); break;
     case "level": npc.level = parseSignedInt(value); break;
     case "rarity": npc.rarity = slugify(value) || "common"; break;
     case "size": npc.size = SIZE_MAP[slugify(value)] ?? "med"; break;
@@ -515,20 +575,44 @@ function normalizeBlock(block, npc, warnings) {
   warnings.push(`Ignored block "${block.name}" in section "${section}".`);
 }
 
+function resolveActorType(npc) {
+  if (npc.kind === "hazard") return "hazard";
+  if (npc.traits?.includes("hazard")) return "hazard";
+  const h = npc.hazard ?? {};
+  if (h.disable || h.routine || h.reset || h.hardness || h.stealth?.value) return "hazard";
+  return "npc";
+}
+
 function validateNpc(npc, errors, warnings) {
-  if (!npc.name) errors.push("Missing NPC name. Use '# NPC Name' or 'Name: NPC Name'.");
+  npc.kind = resolveActorType(npc);
+  const label = npc.kind === "hazard" ? "hazard" : "NPC";
+  if (!npc.name) errors.push(`Missing ${label} name. Use '# Name' or 'Name: ...'.`);
   if (!Number.isInteger(npc.level)) errors.push("Missing or invalid Level.");
   if (!npc.ac.value) warnings.push("AC was not detected; defaulting to 10.");
   if (!npc.hp.value) warnings.push("HP was not detected; defaulting to 10.");
-  if (!npc.attacks.length && !npc.actions.length && !npc.spellcasting.length) warnings.push("No attacks, actions, or spells detected.");
+  if (npc.kind === "hazard") {
+    if (!npc.hazard.disable) warnings.push("No Disable entry detected for this hazard.");
+  } else if (!npc.attacks.length && !npc.actions.length && !npc.spellcasting.length) {
+    warnings.push("No attacks, actions, or spells detected.");
+  }
 }
 
-function buildActorSource(npc, source) {
+async function buildActorSource(npc, source) {
+  const actorType = resolveActorType(npc);
+  const art = await findCreatureArt(npc.name);
+  const img = npc.image || art?.img || `systems/pf2e/icons/default-icons/${actorType}.svg`;
+  const base = actorType === "hazard" ? buildHazardActorSource(npc, source) : buildNpcActorSource(npc, source);
+  base.img = img;
+  base.prototypeToken = buildPrototypeToken(npc, actorType, art);
+  base.flags = { [MODULE_ID]: { [FLAG_SOURCE]: source, [FLAG_PARSED]: npc } };
+  return base;
+}
+
+function buildNpcActorSource(npc, source) {
   const publicNotes = [npc.description, ...npc.notes].filter(Boolean).map((p) => `<p>${autoLinkText(escapeHtml(p))}</p>`).join("\n");
   return {
     name: npc.name,
     type: "npc",
-    img: npc.image,
     system: {
       traits: {
         value: npc.traits,
@@ -562,14 +646,64 @@ function buildActorSource(npc, source) {
         publicNotes,
         privateNotes: `<section><h3>Imported Source</h3><pre>${escapeHtml(source)}</pre></section>`
       }
-    },
-    flags: {
-      [MODULE_ID]: {
-        [FLAG_SOURCE]: source,
-        [FLAG_PARSED]: npc
+    }
+  };
+}
+
+function buildHazardActorSource(npc, source) {
+  const html = (text) => (text ? `<p>${autoLinkText(escapeHtml(text))}</p>` : "");
+  const description = [npc.description, ...npc.notes].filter(Boolean).map((p) => `<p>${autoLinkText(escapeHtml(p))}</p>`).join("\n");
+  return {
+    name: npc.name,
+    type: "hazard",
+    system: {
+      traits: {
+        value: npc.traits.filter((trait) => trait !== "hazard"),
+        rarity: npc.rarity,
+        size: { value: npc.size }
+      },
+      attributes: {
+        ac: { value: npc.ac.value, details: npc.ac.details },
+        hp: { value: npc.hp.value, max: npc.hp.value, temp: 0, details: npc.hp.details, brokenThreshold: 0 },
+        hardness: npc.hazard.hardness,
+        stealth: { value: npc.hazard.stealth.value, details: npc.hazard.stealth.details },
+        immunities: npc.immunities,
+        weaknesses: npc.weaknesses,
+        resistances: npc.resistances,
+        emitsSound: false
+      },
+      saves: {
+        fortitude: { value: npc.saves.fortitude },
+        reflex: { value: npc.saves.reflex },
+        will: { value: npc.saves.will }
+      },
+      details: {
+        level: { value: npc.level },
+        isComplex: !!npc.hazard.complex,
+        description,
+        disable: html(npc.hazard.disable),
+        routine: html(npc.hazard.routine),
+        reset: html(npc.hazard.reset)
       }
     }
   };
+}
+
+function buildPrototypeToken(npc, actorType, art) {
+  const scale = { tiny: 0.5, sm: 1, med: 1, lg: 2, huge: 3, grg: 4 };
+  const dimension = scale[npc.size] ?? 1;
+  const token = {
+    width: dimension,
+    height: dimension,
+    actorLink: false,
+    disposition: actorType === "hazard" ? CONST.TOKEN_DISPOSITIONS.NEUTRAL : CONST.TOKEN_DISPOSITIONS.HOSTILE,
+    displayName: CONST.TOKEN_DISPLAY_MODES.OWNER_HOVER,
+    displayBars: CONST.TOKEN_DISPLAY_MODES.OWNER,
+    sight: { enabled: actorType !== "hazard" },
+    flags: { pf2e: { linkToActorSize: true, autoscale: true } }
+  };
+  if (art?.tokenSrc) token.texture = { src: art.tokenSrc };
+  return token;
 }
 
 async function importItems(actor, npc, { mode = "replaceMatching" } = {}) {
@@ -739,15 +873,81 @@ async function itemSourceFromCompendiums(name, options = {}) {
   return document.toObject();
 }
 
+const INDEX_CACHE = new Map();
+const ACTOR_INDEX_CACHE = new Map();
+
+async function getItemPackIndex(pack) {
+  if (INDEX_CACHE.has(pack.collection)) return INDEX_CACHE.get(pack.collection);
+  const index = await pack.getIndex({ fields: ["name", "type", "system.slug"] });
+  INDEX_CACHE.set(pack.collection, index);
+  return index;
+}
+
+function matchNormalize(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/['’]/g, "")
+    .replace(/^the\s+/, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function isPrefixWordMatch(a, b) {
+  return a.startsWith(`${b} `) || b.startsWith(`${a} `);
+}
+
+function itemPacks(packHint) {
+  const all = game.packs.filter((pack) => pack.documentName === "Item");
+  if (packHint) {
+    const hinted = all.filter((pack) => pack.collection === packHint || pack.metadata?.id === packHint || pack.collection.includes(packHint));
+    if (hinted.length) return hinted;
+  }
+  return all.filter((pack) => pack.metadata?.packageName === "pf2e");
+}
+
 async function findCompendiumItem(name, { type = null, packHint = "" } = {}) {
   if (!globalThis.game?.packs) return null;
-  const normalizedName = normalizeName(name);
-  const packs = game.packs.filter((pack) => pack.documentName === "Item" && (!packHint || pack.collection === packHint || pack.metadata?.id === packHint || pack.collection.includes(packHint)));
-  const searchPacks = packs.length ? packs : game.packs.filter((pack) => pack.documentName === "Item" && pack.metadata?.packageName === "pf2e");
-  for (const pack of searchPacks) {
-    const index = await pack.getIndex({ fields: ["name", "type", "system.slug"] });
-    const entry = index.find((candidate) => (!type || candidate.type === type) && (normalizeName(candidate.name) === normalizedName || slugify(candidate.system?.slug) === slugify(name)));
-    if (entry) return { pack, entry };
+  const target = matchNormalize(name);
+  if (!target) return null;
+  const targetSlug = slugify(name);
+  const packs = itemPacks(packHint);
+  // First honor the requested type; if that yields nothing, retry ignoring type
+  // so a loose "equipment" default can still resolve to a weapon/armor entry.
+  for (const requireType of (type ? [type, null] : [null])) {
+    let fuzzy = null;
+    for (const pack of packs) {
+      const index = await getItemPackIndex(pack);
+      for (const candidate of index) {
+        if (requireType && candidate.type !== requireType) continue;
+        const candName = matchNormalize(candidate.name);
+        if (!candName) continue;
+        if (candName === target || (candidate.system?.slug && slugify(candidate.system.slug) === targetSlug)) return { pack, entry: candidate };
+        if (isPrefixWordMatch(target, candName) && (!fuzzy || candName.length < matchNormalize(fuzzy.entry.name).length)) fuzzy = { pack, entry: candidate };
+      }
+    }
+    if (fuzzy) return fuzzy;
+  }
+  return null;
+}
+
+async function findCreatureArt(name) {
+  if (!globalThis.game?.packs || !name) return null;
+  const target = matchNormalize(name);
+  if (!target) return null;
+  const usable = (path) => (path && !String(path).includes("default-icons") && !String(path).includes("mystery-man") ? path : null);
+  const packs = game.packs.filter((pack) => pack.documentName === "Actor" && pack.metadata?.packageName === "pf2e");
+  for (const pack of packs) {
+    let index = ACTOR_INDEX_CACHE.get(pack.collection);
+    if (!index) {
+      index = await pack.getIndex({ fields: ["name", "img", "prototypeToken.texture.src"] });
+      ACTOR_INDEX_CACHE.set(pack.collection, index);
+    }
+    const entry = index.find((candidate) => matchNormalize(candidate.name) === target);
+    if (!entry) continue;
+    const img = usable(entry.img);
+    const tokenSrc = usable(entry.prototypeToken?.texture?.src);
+    if (img || tokenSrc) return { img, tokenSrc };
   }
   return null;
 }
@@ -787,11 +987,18 @@ function buildSpellLocation(spell, entryId) {
 function renderPreview(parsed, validation = null) {
   if (!parsed) return `<div class="gluni-empty-preview"><i class="fa-solid fa-scroll"></i><h2>No preview yet</h2><p>Paste a strict Markdown stat block and click <strong>Parse Preview</strong>.</p></div>`;
   const { npc, warnings, errors } = parsed;
+  const actorType = resolveActorType(npc);
   const chips = (values) => `<span class="gluni-chip-list">${values.map((v) => `<span class="gluni-chip">${escapeHtml(v)}</span>`).join("")}</span>`;
+  const hazardCard = actorType === "hazard" ? `
+    <div class="gluni-preview-card">
+      <h3>Hazard</h3>
+      <p><strong>Stealth</strong> ${signed(npc.hazard.stealth.value)} &nbsp; <strong>Hardness</strong> ${npc.hazard.hardness} &nbsp; <strong>Complexity</strong> ${npc.hazard.complex ? "complex" : "simple"}</p>
+      ${npc.hazard.disable ? `<p><strong>Disable:</strong> ${escapeHtml(npc.hazard.disable)}</p>` : ""}
+    </div>` : "";
   return `
     <div class="gluni-preview-title">
-      <p class="gluni-eyebrow">Parsed Preview</p>
-      <h2>${escapeHtml(npc.name || "Unnamed NPC")}</h2>
+      <p class="gluni-eyebrow">Parsed Preview — ${actorType === "hazard" ? "Hazard" : "NPC"}</p>
+      <h2>${escapeHtml(npc.name || "Unnamed")}</h2>
     </div>
     ${errors.map((error) => `<p class="gluni-notice gluni-error">${escapeHtml(error)}</p>`).join("")}
     ${warnings.map((warning) => `<p class="gluni-notice gluni-warning">${escapeHtml(warning)}</p>`).join("")}
@@ -817,6 +1024,7 @@ function renderPreview(parsed, validation = null) {
       <tr><th>Spellcasting</th><td>${npc.spellcasting.length}</td><th>Inventory</th><td>${npc.inventory.length}</td></tr>
       <tr><th>Effects/Auras</th><td>${npc.effects.length}</td><th>Rule Elements</th><td>${countRules(npc)}</td></tr>
     </table>
+    ${hazardCard}
     ${renderValidation(validation)}
     ${renderNamedList("Attacks", npc.attacks)}
     ${renderNamedList("Actions", npc.actions)}
@@ -853,8 +1061,8 @@ async function validateParsed(parsed) {
   if (!parsed?.npc) return result;
   const { npc } = parsed;
   const traitSet = pf2eTraitSet();
-  const damageTypes = new Set(Object.keys(globalThis.CONFIG?.PF2E?.damageTypes ?? {}).concat(DAMAGE_TYPES));
-  const ruleKeys = new Set(["AdjustModifier", "AdjustStrike", "Aura", "ChoiceSet", "FlatModifier", "GrantItem", "Note", "Resistance", "RollOption", "Weakness"]);
+  const damageTypes = getDamageTypeSet();
+  const ruleKeys = getRuleElementKeys();
 
   for (const trait of collectTraits(npc)) {
     if (traitSet.size && !traitSet.has(trait)) result.warnings.push(`Unknown PF2e trait slug: ${trait}`);
@@ -869,7 +1077,7 @@ async function validateParsed(parsed) {
   }
   for (const rule of collectRules(npc)) {
     if (!rule?.key) result.errors.push("Rule Element is missing a key.");
-    else if (!ruleKeys.has(rule.key)) result.warnings.push(`Rule Element key is not in the helper validation list: ${rule.key}`);
+    else if (!ruleKeys.has(rule.key)) result.warnings.push(`Unknown Rule Element key for the installed PF2e version: ${rule.key}`);
   }
   for (const entry of npc.spellcasting) {
     for (const spell of entry.spells) {
@@ -902,7 +1110,7 @@ function pf2eTraitSet() {
 
 function isKnownAttackEffect(effect) {
   const config = globalThis.CONFIG?.PF2E?.attackEffects ?? {};
-  return !Object.keys(config).length || effect in config || CONDITION_WORDS.includes(effect);
+  return !Object.keys(config).length || effect in config || getConditionSlugs().includes(effect);
 }
 
 function parseKeyValue(line) {
@@ -1111,8 +1319,10 @@ function autoLinkText(text) {
   let enriched = text;
   enriched = enriched.replace(/\b(DC)\s+(\d+)\s+(Fortitude|Fort|Reflex|Ref|Will)\b/gi, (_match, _dc, dc, save) => `@Check[type:${SAVE_MAP[slugify(save)]}|dc:${dc}|showDC:all]`);
   enriched = enriched.replace(/\b(Fortitude|Fort|Reflex|Ref|Will)\s+DC\s+(\d+)\b/gi, (_match, save, dc) => `@Check[type:${SAVE_MAP[slugify(save)]}|dc:${dc}|showDC:all]`);
-  enriched = enriched.replace(/\b(\d+d\d+(?:\s*[+\-]\s*\d+)?)\s+(${DAMAGE_TYPES.join("|")})\s+damage\b/gi, (_match, formula, type) => `@Damage[(${formula.replace(/\s+/g, "")})[${slugify(type)}]]{${formula} ${type} damage}`);
-  for (const condition of CONDITION_WORDS) {
+  const damageTypes = getDamageTypeList();
+  const damageRe = new RegExp(`\\b(\\d+d\\d+(?:\\s*[+\\-]\\s*\\d+)?)\\s+(${damageTypes.join("|")})\\s+damage\\b`, "gi");
+  enriched = enriched.replace(damageRe, (_match, formula, type) => `@Damage[(${formula.replace(/\s+/g, "")})[${slugify(type)}]]{${formula} ${type} damage}`);
+  for (const condition of getConditionSlugs()) {
     const label = titleCase(condition.replace(/-/g, " "));
     const uuid = conditionUuid(condition);
     const pattern = new RegExp(`\\b${condition.replace(/-/g, "[- ]")}\\b`, "gi");
@@ -1139,6 +1349,7 @@ function conditionUuid(slug) {
 
 function parseDamageRolls(value, warnings = [], attackName = "attack") {
   const text = String(value ?? "").replace(/\bplus\b/gi, ",");
+  const damageTypes = getDamageTypeSet();
   const rolls = {};
   let index = 0;
   for (const part of text.split(/,|;/).map((piece) => piece.trim()).filter(Boolean)) {
@@ -1150,7 +1361,7 @@ function parseDamageRolls(value, warnings = [], attackName = "attack") {
     const formula = match[1].replace(/\s+/g, "");
     const categorySlug = slugify(match[2] ?? "");
     const typeSlug = slugify(match[3]);
-    const damageType = DAMAGE_TYPES.includes(typeSlug) ? typeSlug : "bludgeoning";
+    const damageType = damageTypes.has(typeSlug) ? typeSlug : "bludgeoning";
     const category = DAMAGE_CATEGORIES.includes(categorySlug) ? categorySlug : null;
     if (["critical-only", "crit-only"].includes(categorySlug)) warnings.push(`Critical-only damage on ${attackName} is preserved in the text but cannot be represented as an NPC Strike damage category.`);
     rolls[index === 0 ? "main" : `extra${index}`] = { damage: formula, damageType, category };
@@ -1255,10 +1466,6 @@ function signed(value) {
   return Number(value) >= 0 ? `+${Number(value)}` : String(Number(value));
 }
 
-function normalizeName(value) {
-  return String(value ?? "").trim().toLocaleLowerCase();
-}
-
 function titleCase(value) {
   return String(value).replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -1268,6 +1475,7 @@ function escapeHtml(value) {
 }
 
 function exportActorToMarkdown(actor) {
+  if (actor.type === "hazard") return exportHazardToMarkdown(actor);
   const system = actor.system;
   const lines = [
     `# ${actor.name}`,
@@ -1301,6 +1509,38 @@ function exportActorToMarkdown(actor) {
   if (inventory.length) lines.push("", "## Inventory", ...inventory.flatMap(exportInventory));
   const effects = actor.items.filter((item) => item.type === "effect");
   if (effects.length) lines.push("", "## Effects", ...effects.flatMap(exportEffect));
+  return `${lines.join("\n")}\n`;
+}
+
+function exportHazardToMarkdown(actor) {
+  const system = actor.system;
+  const lines = [
+    `# ${actor.name}`,
+    "Type: hazard",
+    `Level: ${system.details?.level?.value ?? 1}`,
+    `Rarity: ${system.traits?.rarity ?? "common"}`,
+    `Size: ${system.traits?.size?.value ?? "medium"}`,
+    `Traits: ${(system.traits?.value ?? []).join(", ")}`,
+    `Complexity: ${system.details?.isComplex ? "complex" : "simple"}`,
+    `Stealth: ${signed(system.attributes?.stealth?.value ?? 0)}${system.attributes?.stealth?.details ? `; ${system.attributes.stealth.details}` : ""}`,
+    `AC: ${system.attributes?.ac?.value ?? 10}`,
+    `Fortitude: ${signed(system.saves?.fortitude?.value ?? 0)}`,
+    `Reflex: ${signed(system.saves?.reflex?.value ?? 0)}`,
+    `Will: ${signed(system.saves?.will?.value ?? 0)}`,
+    `Hardness: ${system.attributes?.hardness ?? 0}`,
+    `HP: ${system.attributes?.hp?.max ?? system.attributes?.hp?.value ?? 0}`,
+    formatIWR("Immunities", system.attributes?.immunities),
+    formatIWR("Weaknesses", system.attributes?.weaknesses),
+    formatIWR("Resistances", system.attributes?.resistances),
+    `Description: ${stripHtml(system.details?.description ?? "")}`,
+    system.details?.disable ? `Disable: ${stripHtml(system.details.disable)}` : "",
+    system.details?.routine ? `Routine: ${stripHtml(system.details.routine)}` : "",
+    system.details?.reset ? `Reset: ${stripHtml(system.details.reset)}` : ""
+  ].filter(Boolean);
+  const attacks = actor.items.filter((item) => item.type === "melee");
+  if (attacks.length) lines.push("", "## Attacks", ...attacks.flatMap(exportAttack));
+  const actions = actor.items.filter((item) => item.type === "action");
+  if (actions.length) lines.push("", "## Actions", ...actions.flatMap(exportAction));
   return `${lines.join("\n")}\n`;
 }
 
@@ -1393,6 +1633,265 @@ function formatRules(rules = []) {
 
 function stripHtml(value) {
   return String(value ?? "").replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+}
+
+// ---------------------------------------------------------------------------
+// Loose / published stat block support
+//
+// Accepts the standard published PF2e layout (Archives of Nethys / Monster Core
+// text) and converts it into the strict Markdown the parser already understands,
+// so both NPCs and hazards share a single downstream pipeline.
+// ---------------------------------------------------------------------------
+
+const LOOSE_RARITIES = new Set(["common", "uncommon", "rare", "unique"]);
+const LOOSE_SIZES = new Set(["tiny", "small", "medium", "large", "huge", "gargantuan"]);
+const LOOSE_ALIGNMENTS = new Set(["lg", "ng", "cg", "ln", "n", "cn", "le", "ne", "ce", "any"]);
+
+function looksLikeStrictMarkdown(text) {
+  return /^\s*#\s+\S/m.test(String(text ?? ""));
+}
+
+function normalizeActionGlyphs(line) {
+  return String(line)
+    .replace(/\bsingle action\b/gi, "one-action")
+    .replace(/[➊①]/g, " [one-action] ")
+    .replace(/[➋②]/g, " [two-actions] ")
+    .replace(/[➌③]/g, " [three-actions] ");
+}
+
+function readActionToken(line) {
+  const match = line.match(/\[\s*(free[\s-]?action|reaction|one[\s-]?action|two[\s-]?actions?|three[\s-]?actions?|1\s?action|2\s?actions?|3\s?actions?)\s*\]/i);
+  if (!match) return null;
+  const token = match[1].toLowerCase();
+  let type = "action";
+  let count = 1;
+  if (token.includes("free")) type = "free";
+  else if (token.includes("reaction")) type = "reaction";
+  else if (token.includes("two") || token.includes("2")) count = 2;
+  else if (token.includes("three") || token.includes("3")) count = 3;
+  return { type, count, index: match.index, length: match[0].length };
+}
+
+function readPassiveAbility(line) {
+  const match = line.match(/^([A-Z][A-Za-z'’-]+(?:\s+[A-Za-z'’-]+){0,4})\s+\(([a-z][a-z0-9,\s-]*)\)\s*(.*)$/);
+  return match ? { name: match[1].trim(), traits: match[2].trim(), rest: match[3].trim() } : null;
+}
+
+function parseLooseHeader(line) {
+  let match = line.match(/^(.*?)[\s–—-]*\b(creature|hazard|npc)\b\s*(-?\d+)\s*$/i);
+  if (match) return { name: match[1].replace(/[\s–—-]+$/, "").trim(), kind: /hazard/i.test(match[2]) ? "hazard" : "npc", level: Number(match[3]) };
+  match = line.match(/^(.*\S)\s+(-?\d+)\s*$/);
+  if (match) return { name: match[1].trim(), kind: "npc", level: Number(match[2]) };
+  return { name: line.trim(), kind: "npc", level: null };
+}
+
+function parseLooseTraitLine(line, core) {
+  const tokens = line.split(/[,]/).flatMap((part) => part.trim().split(/\s+/)).map((token) => token.trim()).filter(Boolean);
+  const traits = [];
+  for (const token of tokens) {
+    const lower = token.toLowerCase();
+    if (LOOSE_RARITIES.has(lower)) core.rarity = lower;
+    else if (LOOSE_SIZES.has(lower)) core.size = lower;
+    else if (LOOSE_ALIGNMENTS.has(lower)) continue;
+    else traits.push(lower);
+  }
+  if (traits.length) core.traits = traits;
+}
+
+function mapLooseDefenseLine(line, out) {
+  for (const segment of line.split(";")) {
+    const trimmed = segment.trim();
+    if (!trimmed) continue;
+    const keyword = slugify(trimmed.match(/^([A-Za-z]+)/)?.[1] ?? "");
+    if (["immunities", "weaknesses", "resistances"].includes(keyword)) {
+      out.push(`${titleCase(keyword)}: ${trimmed.replace(/^[A-Za-z]+\s*/, "").trim()}`);
+      continue;
+    }
+    for (const piece of trimmed.split(",")) {
+      const token = piece.trim();
+      const kv = token.match(/^([A-Za-z]+)\s+(.*)$/);
+      if (!kv) continue;
+      const key = slugify(kv[1]);
+      const rest = kv[2].trim();
+      if (key === "ac") out.push(`AC: ${rest}`);
+      else if (["fort", "fortitude"].includes(key)) out.push(`Fortitude: ${rest}`);
+      else if (["ref", "reflex"].includes(key)) out.push(`Reflex: ${rest}`);
+      else if (key === "will") out.push(`Will: ${rest}`);
+      else if (key === "hp") out.push(`HP: ${rest.replace(/\(.*?\)/g, "").trim()}`);
+      else if (key === "hardness") out.push(`Hardness: ${rest}`);
+    }
+  }
+}
+
+function buildLooseAttackBlock(line) {
+  const type = /^ranged/i.test(line) ? "ranged" : "melee";
+  let rest = line.replace(/^(melee|ranged)\b/i, "").trim();
+  const token = readActionToken(rest);
+  if (token) rest = (rest.slice(0, token.index) + rest.slice(token.index + token.length)).trim();
+  const damageMatch = rest.match(/,?\s*Damage\s+(.*)$/i);
+  let damageText = damageMatch ? damageMatch[1].trim() : "";
+  if (damageMatch) rest = rest.slice(0, damageMatch.index).trim();
+  const head = rest.match(/^(.*?)\s*([+-]\d+)\s*(?:\(([^)]*)\))?\s*$/);
+  const name = (head?.[1] ?? rest).trim() || "Attack";
+  const bonus = head?.[2] ?? "+0";
+  const parenItems = splitList(head?.[3] ?? "");
+  const traits = [];
+  let range = null;
+  for (const item of parenItems) {
+    const reach = item.match(/reach\s+(\d+)/i);
+    const increment = item.match(/range(?:\s+increment)?\s+(\d+)/i);
+    if (reach) traits.push(`reach-${reach[1]}`);
+    else if (increment) range = Number(increment[1]);
+    else traits.push(slugify(item));
+  }
+  const damageSegments = damageText ? damageText.split(/\bplus\b/i).map((part) => part.trim()).filter(Boolean) : [];
+  const damageParts = [];
+  const effects = [];
+  for (const segment of damageSegments) {
+    if (/^\d/.test(segment) || /\d+d\d+/.test(segment)) damageParts.push(segment);
+    else effects.push(slugify(segment));
+  }
+  const block = ["", `### ${name}`, `Type: ${type}`, `Bonus: ${bonus}`];
+  if (damageParts.length) block.push(`Damage: ${damageParts.join(" plus ")}`);
+  if (range) block.push(`Range: ${range} feet`);
+  if (traits.length) block.push(`Traits: ${traits.join(", ")}`);
+  if (effects.length) block.push(`Effects: ${effects.join(", ")}`);
+  return block;
+}
+
+function buildLooseSpellBlock(line) {
+  const dc = line.match(/\bDC\s+(\d+)/i)?.[1];
+  const attack = line.match(/\battack\s+([+-]?\d+)/i)?.[1];
+  const headMatch = line.match(/^(.*?spells|.*?rituals|.*?focus)\b/i);
+  const header = (headMatch?.[1] ?? "Spells").replace(/\s+(DC|attack).*/i, "").trim();
+  const headerSlug = slugify(header);
+  const tradition = ["arcane", "divine", "occult", "primal"].find((t) => headerSlug.includes(t)) ?? "arcane";
+  const type = ["prepared", "spontaneous", "innate", "focus", "ritual"].find((t) => headerSlug.includes(t)) ?? "innate";
+  const body = line.slice((headMatch?.[0]?.length ?? 0)).replace(/^[^;]*?(DC\s+\d+(,\s*attack\s+[+-]?\d+)?)?/i, "");
+  const block = ["", `### ${header || "Spells"}`, `Tradition: ${tradition}`, `Type: ${type}`];
+  if (dc) block.push(`DC: ${dc}`);
+  if (attack) block.push(`Attack: ${attack}`);
+  block.push("Description:");
+  for (const rawSegment of body.split(";")) {
+    const segment = rawSegment.trim();
+    if (!segment) continue;
+    let m = segment.match(/^(\d+)(?:st|nd|rd|th)?\b\s*(?:\((\d+)\s*slots?\))?\s*(.+)$/i);
+    if (m) { block.push(`- ${m[1]}${m[2] ? ` (${m[2]} slots)` : ""}: ${m[3].trim()}`); continue; }
+    m = segment.match(/^cantrips?\b(?:\s*\((\d+)(?:st|nd|rd|th)?\))?\s*:?\s*(.+)$/i);
+    if (m) { block.push(`- Cantrips: ${m[2].trim()}`); continue; }
+    m = segment.match(/^(constant|at[\s-]?will)\b(?:\s*\((\d+)(?:st|nd|rd|th)?\))?\s*:?\s*(.+)$/i);
+    if (m) { block.push(`- ${/constant/i.test(m[1]) ? "Constant" : "At Will"}: ${m[3].trim()}`); continue; }
+  }
+  return block;
+}
+
+function flushLooseAction(action, actionText) {
+  if (!action) return;
+  const block = ["", `### ${action.name}`, `Type: ${action.type}`];
+  if (action.type === "action") block.push(`Actions: ${action.count}`);
+  if (action.traits) block.push(`Traits: ${action.traits}`);
+  const description = action.descLines.join(" ").trim();
+  if (description) block.push(`Description: ${description}`);
+  actionText.push(...block);
+}
+
+function convertLooseToStrict(text, warnings = []) {
+  warnings.push("Parsed using the loose stat block reader; review the preview before importing.");
+  const lines = String(text ?? "").replace(/\r\n?/g, "\n").split("\n").map((line) => normalizeActionGlyphs(line).trim());
+  const core = { rarity: "common", size: "medium", traits: [] };
+  const coreLines = [];
+  const attackText = [];
+  const actionText = [];
+  const spellText = [];
+  const inventory = [];
+  const descParts = [];
+  let header = null;
+  let sawTraitLine = false;
+  let pendingAction = null;
+  let pendingField = null;
+
+  const flushPending = () => {
+    flushLooseAction(pendingAction, actionText);
+    pendingAction = null;
+    if (pendingField) {
+      coreLines.push(`${pendingField.label}: ${pendingField.lines.join(" ").trim()}`);
+      pendingField = null;
+    }
+  };
+
+  for (const line of lines) {
+    if (!line) { continue; }
+    if (!header) { header = parseLooseHeader(line); continue; }
+
+    const keyword = line.match(/^([A-Za-z][A-Za-z-]*)\b/)?.[1]?.toLowerCase() ?? "";
+    const isAbilityLine = /\b(str|dex|con|int|wis|cha)\b.*\b(str|dex|con|int|wis|cha)\b/i.test(line) && /^(str|dex|con|int|wis|cha)\b/i.test(line);
+
+    if (!sawTraitLine) {
+      sawTraitLine = true;
+      const knownStart = ["perception", "languages", "skills", "items", "ac", "hp", "hardness", "speed", "melee", "ranged", "stealth", "disable", "routine", "reset", "trigger", "effect"].includes(keyword);
+      if (!knownStart && !isAbilityLine && !/[:+]/.test(line)) { parseLooseTraitLine(line, core); continue; }
+    }
+
+    if (/^(melee|ranged)\b/i.test(line)) { flushPending(); attackText.push(...buildLooseAttackBlock(line)); continue; }
+    if (/spells\b/i.test(line) && /\bDC\s+\d+/i.test(line)) { flushPending(); spellText.push(...buildLooseSpellBlock(line)); continue; }
+    if (/(focus\s+spells|rituals)\b/i.test(line)) { flushPending(); spellText.push(...buildLooseSpellBlock(line)); continue; }
+
+    if (keyword === "perception") {
+      flushPending();
+      const value = line.replace(/^perception\b\s*/i, "");
+      const [mod, ...senses] = value.split(";");
+      coreLines.push(`Perception: ${mod.trim()}`);
+      if (senses.length) coreLines.push(`Senses: ${senses.join(";").trim()}`);
+      continue;
+    }
+    if (keyword === "languages") { flushPending(); coreLines.push(`Languages: ${line.replace(/^languages?\b\s*/i, "")}`); continue; }
+    if (keyword === "skills") { flushPending(); coreLines.push(`Skills: ${line.replace(/^skills?\b\s*/i, "")}`); continue; }
+    if (isAbilityLine) { flushPending(); coreLines.push(`Abilities: ${line}`); continue; }
+    if (keyword === "items") { flushPending(); inventory.push(...splitList(line.replace(/^items?\b\s*/i, "")).map((name) => name.replace(/\([^)]*\)/g, "").trim()).filter(Boolean)); continue; }
+    if (keyword === "stealth") { flushPending(); coreLines.push(`Stealth: ${line.replace(/^stealth\b\s*/i, "")}`); continue; }
+    if (keyword === "speed") { flushPending(); coreLines.push(`Speed: ${line.replace(/^speed\b\s*/i, "")}`); continue; }
+    if (keyword === "ac" || keyword === "hp" || keyword === "hardness") { flushPending(); mapLooseDefenseLine(line, coreLines); continue; }
+    if (["disable", "routine", "reset"].includes(keyword)) {
+      flushPending();
+      pendingField = { label: titleCase(keyword), lines: [line.replace(/^[A-Za-z]+\b\s*/i, "").trim()] };
+      continue;
+    }
+
+    const actionToken = readActionToken(line);
+    if (actionToken) {
+      flushPending();
+      const name = line.slice(0, actionToken.index).trim() || "Ability";
+      const after = line.slice(actionToken.index + actionToken.length).trim();
+      const traitMatch = after.match(/^\(([^)]*)\)\s*(.*)$/);
+      pendingAction = { name, type: actionToken.type, count: actionToken.count, traits: traitMatch ? traitMatch[1].trim() : "", descLines: traitMatch ? [traitMatch[2]] : [after] };
+      continue;
+    }
+
+    const passive = readPassiveAbility(line);
+    if (passive && sawTraitLine) {
+      flushPending();
+      pendingAction = { name: passive.name, type: "passive", count: 1, traits: passive.traits, descLines: [passive.rest] };
+      continue;
+    }
+
+    if (pendingAction) pendingAction.descLines.push(line);
+    else if (pendingField) pendingField.lines.push(line);
+    else descParts.push(line);
+  }
+  flushPending();
+
+  const out = [`# ${header?.name ?? "Imported Stat Block"}`];
+  if (header?.kind === "hazard") out.push("Type: hazard");
+  if (Number.isInteger(header?.level)) out.push(`Level: ${header.level}`);
+  out.push(`Rarity: ${core.rarity}`, `Size: ${core.size}`);
+  if (core.traits.length) out.push(`Traits: ${core.traits.join(", ")}`);
+  out.push(...coreLines);
+  if (descParts.length) out.push(`Description: ${descParts.join(" ").trim()}`);
+  if (attackText.length) out.push("", "## Attacks", ...attackText);
+  if (actionText.length) out.push("", "## Actions", ...actionText);
+  if (spellText.length) out.push("", "## Spellcasting", ...spellText);
+  if (inventory.length) out.push("", "## Inventory", ...inventory.flatMap((name) => ["", `### ${name}`, "Type: equipment"]));
+  return out.join("\n");
 }
 
 function sampleStatBlock() {

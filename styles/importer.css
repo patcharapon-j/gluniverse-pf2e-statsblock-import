@@ -1,377 +1,241 @@
 .gluniverse-pf2e-importer {
-  --gluni-bg: #120b0b;
-  --gluni-panel: rgba(35, 19, 17, 0.92);
-  --gluni-panel-soft: rgba(64, 33, 28, 0.72);
-  --gluni-panel-bright: rgba(104, 48, 37, 0.45);
-  --gluni-border: rgba(240, 198, 120, 0.26);
-  --gluni-border-strong: rgba(248, 208, 126, 0.48);
-  --gluni-text: #f8ead1;
-  --gluni-muted: #c9aa7e;
-  --gluni-gold: #f4c461;
-  --gluni-gold-soft: #936b2f;
-  --gluni-red: #9f3329;
-  --gluni-red-deep: #511b18;
-  --gluni-green: #7cc27d;
-  --gluni-warning: #f4b456;
-  --gluni-error: #ff7b72;
-  --gluni-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
-  --gluni-gap: 0.9rem;
-  min-width: 780px;
+  --gluni-border: var(--color-border-light-tertiary, rgba(127, 127, 127, 0.4));
+  --gluni-border-soft: var(--color-border-light-tertiary, rgba(127, 127, 127, 0.25));
+  --gluni-fill: rgba(127, 127, 127, 0.08);
+  min-width: 640px;
 }
 
 .gluniverse-pf2e-importer .window-content {
   padding: 0;
-  color: var(--gluni-text);
-  background:
-    radial-gradient(circle at top left, rgba(203, 65, 49, 0.28), transparent 34rem),
-    radial-gradient(circle at 85% 18%, rgba(244, 196, 97, 0.15), transparent 26rem),
-    linear-gradient(135deg, #0e0909 0%, #1b0f0e 48%, #2a1512 100%);
 }
 
-.gluni-pf2e-importer {
-  display: grid;
-  grid-template-columns: minmax(320px, 42%) minmax(360px, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: var(--gluni-gap);
-  height: 100%;
-  min-height: 680px;
-  padding: var(--gluni-gap);
-}
-
-.gluni-import-hero {
-  grid-column: 1 / -1;
+.gluni-importer {
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-direction: column;
+  gap: 0.5rem;
+  height: 100%;
+  padding: 0.75rem;
+  box-sizing: border-box;
+}
+
+/* Header */
+.gluni-header {
+  flex: 0 0 auto;
+}
+
+.gluni-header h1 {
+  display: flex;
   align-items: center;
-  padding: 1rem 1.15rem;
-  border: 1px solid var(--gluni-border);
-  border-radius: 18px;
-  background:
-    linear-gradient(135deg, rgba(108, 30, 24, 0.92), rgba(38, 18, 18, 0.94)),
-    linear-gradient(90deg, rgba(244, 196, 97, 0.18), transparent);
-  box-shadow: var(--gluni-shadow);
-  position: relative;
-  overflow: hidden;
-}
-
-.gluni-import-hero::after {
-  content: "";
-  position: absolute;
-  inset: auto -3rem -5rem auto;
-  width: 18rem;
-  height: 18rem;
-  border-radius: 999px;
-  background: rgba(244, 196, 97, 0.12);
-  pointer-events: none;
-}
-
-.gluni-import-hero h1,
-.gluni-import-hero p {
+  gap: 0.5rem;
   margin: 0;
+  border: none;
+  font-size: 1.25rem;
 }
 
-.gluni-import-hero h1 {
-  color: #fff5dd;
-  font-size: 1.55rem;
-  letter-spacing: 0.01em;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+.gluni-subtitle {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.75;
 }
 
-.gluni-import-hero p:not(.gluni-eyebrow) {
-  color: var(--gluni-muted);
-  margin-top: 0.25rem;
+/* Two-column body */
+.gluni-body {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(300px, 5fr) minmax(320px, 6fr);
+  gap: 0.75rem;
+  min-height: 0;
 }
 
-.gluni-eyebrow {
-  color: var(--gluni-gold);
+.gluni-input {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+/* Form fields */
+.gluni-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.gluni-field-grow {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.gluni-label {
+  font-size: 0.75rem;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.gluni-importer textarea[name="source"] {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 200px;
+  resize: vertical;
+  padding: 0.5rem;
+  font-family: var(--font-monospace, ui-monospace, monospace);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.gluni-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.gluni-importer button {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.gluni-primary {
+  font-weight: bold;
+}
+
+.gluni-target select {
+  flex: 1 1 160px;
+}
+
+/* Rule element helper */
+.gluni-rule-helper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.5rem 0.6rem 0.6rem;
+  border: 1px solid var(--gluni-border);
+  border-radius: 6px;
+}
+
+.gluni-rule-helper legend {
+  padding: 0 0.35rem;
   font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-weight: bold;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
-.gluni-hero-badges,
+.gluni-rule-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.gluni-rule-grid select,
+.gluni-rule-grid input {
+  min-width: 0;
+}
+
+.gluni-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  opacity: 0.7;
+}
+
+/* Preview */
+.gluni-preview {
+  min-height: 0;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--gluni-border);
+  border-radius: 6px;
+  background: var(--gluni-fill);
+}
+
+.gluni-eyebrow {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.gluni-preview-title {
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--gluni-border-soft);
+}
+
+.gluni-preview-title h2 {
+  margin: 0;
+  border: none;
+  font-size: 1.2rem;
+}
+
+.gluni-preview h3 {
+  margin: 0.9rem 0 0.4rem;
+  border: none;
+  font-size: 0.95rem;
+}
+
+.gluni-preview h4 {
+  margin: 0.6rem 0 0.25rem;
+  font-size: 0.85rem;
+}
+
+/* Stat tables */
+.gluni-stat-table {
+  width: 100%;
+  margin: 0 0 0.6rem;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.gluni-stat-table th,
+.gluni-stat-table td {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--gluni-border-soft);
+  text-align: left;
+  vertical-align: top;
+}
+
+.gluni-stat-table th {
+  width: 6.5rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--gluni-fill);
+  opacity: 0.85;
+}
+
+/* Chips */
 .gluni-chip-list,
 .gluni-ability-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
-.gluni-hero-badges span,
 .gluni-chip,
 .gluni-ability-row span {
-  border: 1px solid var(--gluni-border-strong);
-  border-radius: 999px;
-  padding: 0.22rem 0.58rem;
-  color: #ffe9b8;
-  background: rgba(19, 12, 10, 0.5);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-.gluni-import-column,
-.gluni-preview-column {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gluni-gap);
-  min-height: 0;
-}
-
-.gluni-panel,
-.gluni-preview {
+  padding: 0.1rem 0.5rem;
   border: 1px solid var(--gluni-border);
-  border-radius: 16px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
-    var(--gluni-panel);
-  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.26);
+  border-radius: 999px;
+  background: var(--gluni-fill);
+  font-size: 0.78rem;
 }
 
-.gluni-panel {
-  padding: 0.75rem;
-}
-
-.gluni-source-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-  min-height: 0;
-  flex: 1 1 auto;
-}
-
-.gluni-panel-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: start;
-  gap: 0.75rem;
-}
-
-.gluni-panel-heading h2,
-.gluni-panel-heading p {
-  margin: 0;
-}
-
-.gluni-panel-heading h2,
-.gluni-preview h2,
-.gluni-preview h3,
-.gluni-preview h4 {
-  color: #fff1cf;
-}
-
-.gluni-panel-heading p {
-  color: var(--gluni-muted);
-  font-size: 0.85rem;
-  margin-top: 0.15rem;
-}
-
-.gluni-pf2e-importer textarea[name="source"] {
-  width: 100%;
-  min-height: 430px;
-  flex: 1 1 430px;
-  resize: vertical;
-  border: 1px solid rgba(244, 196, 97, 0.32);
-  border-radius: 13px;
-  padding: 0.85rem;
-  color: #ffeecf;
-  background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.24), rgba(0, 0, 0, 0.42)),
-    #140e0d;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03), inset 0 15px 35px rgba(0, 0, 0, 0.24);
-  font-family: var(--font-monospace, ui-monospace, SFMono-Regular, Consolas, monospace);
-  line-height: 1.42;
-}
-
-.gluni-pf2e-importer textarea[name="source"]:focus,
-.gluni-pf2e-importer select:focus,
-.gluni-pf2e-importer input:focus {
-  outline: none;
-  border-color: var(--gluni-gold);
-  box-shadow: 0 0 0 3px rgba(244, 196, 97, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-}
-
-.gluni-import-actions,
-.gluni-import-options,
-.gluni-target-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  align-items: center;
-}
-
-.gluni-options-panel label {
-  display: grid;
-  grid-template-columns: auto minmax(230px, 1fr);
-  align-items: center;
-  gap: 0.6rem;
-  width: 100%;
-  color: var(--gluni-muted);
-  font-weight: 700;
-}
-
-.gluni-pf2e-importer button,
-.gluni-pf2e-importer select,
-.gluni-pf2e-importer input {
-  border: 1px solid rgba(244, 196, 97, 0.28);
-  border-radius: 10px;
-  color: var(--gluni-text);
-  background: linear-gradient(180deg, rgba(84, 45, 36, 0.96), rgba(44, 25, 22, 0.96));
-}
-
-.gluni-pf2e-importer select,
-.gluni-pf2e-importer input {
-  min-height: 2.25rem;
-  padding: 0.35rem 0.55rem;
-}
-
-.gluni-pf2e-importer button {
-  min-height: 2.25rem;
-  padding: 0.35rem 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 18px rgba(0, 0, 0, 0.22);
-  transition: transform 120ms ease, border-color 120ms ease, filter 120ms ease;
-}
-
-.gluni-pf2e-importer button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  border-color: var(--gluni-border-strong);
-  filter: brightness(1.08);
-}
-
-.gluni-pf2e-importer button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-  filter: grayscale(0.4);
-}
-
-.gluni-pf2e-importer button.gluni-primary {
-  border-color: rgba(255, 220, 137, 0.64);
-  color: #1c1009;
-  background: linear-gradient(180deg, #ffd875, #d79534 55%, #a95725);
-  text-shadow: 0 1px rgba(255, 255, 255, 0.32);
-}
-
-.gluni-target-row select {
-  flex: 1 1 220px;
-}
-
-.gluni-rule-helper {
-  display: grid;
-  grid-template-columns: minmax(120px, 0.8fr) 1fr 1fr auto;
-  gap: 0.5rem;
-  align-items: end;
-  min-inline-size: 0;
-  margin: 0;
-  padding: 0.1rem 0 0;
-  border: 0;
-}
-
-.gluni-rule-helper legend {
-  float: left;
-  width: 100%;
-  margin-bottom: 0.45rem;
-  color: var(--gluni-gold);
-  font-size: 0.82rem;
-  font-weight: 900;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.gluni-rule-helper input,
-.gluni-rule-helper select {
-  min-width: 0;
-}
-
-.gluni-muted {
-  color: var(--gluni-muted);
-  opacity: 0.92;
-}
-
-.gluni-import-column > .gluni-muted {
-  margin: 0 0.25rem;
-  font-size: 0.84rem;
-}
-
-.gluni-preview {
-  overflow: auto;
-  padding: 0.95rem;
-  min-height: 500px;
-  color: var(--gluni-text);
-}
-
-.gluni-preview-title {
-  margin-bottom: 0.85rem;
-  padding-bottom: 0.8rem;
-  border-bottom: 1px solid var(--gluni-border);
-}
-
-.gluni-preview-title h2,
-.gluni-preview-title p {
-  margin: 0;
-}
-
-.gluni-preview-title h2 {
-  font-size: 1.45rem;
-}
-
-.gluni-preview h3 {
-  margin: 1rem 0 0.45rem;
-  font-size: 1rem;
-}
-
-.gluni-preview h4 {
-  margin: 0.7rem 0 0.3rem;
-  color: var(--gluni-gold);
-}
-
-.gluni-stat-table {
-  width: 100%;
-  margin: 0 0 0.8rem;
-  border-collapse: separate;
-  border-spacing: 0;
-  overflow: hidden;
-  border: 1px solid rgba(244, 196, 97, 0.2);
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.16);
-}
-
-.gluni-stat-table tr:nth-child(odd) {
-  background: rgba(255, 255, 255, 0.025);
-}
-
-.gluni-stat-table td,
-.gluni-stat-table th {
-  padding: 0.42rem 0.5rem;
-  vertical-align: top;
-  border-bottom: 1px solid rgba(244, 196, 97, 0.1);
-}
-
-.gluni-stat-table tr:last-child td,
-.gluni-stat-table tr:last-child th {
-  border-bottom: 0;
-}
-
-.gluni-stat-table th {
-  width: 7rem;
-  color: var(--gluni-gold);
-  font-size: 0.76rem;
-  letter-spacing: 0.07em;
-  text-align: left;
-  text-transform: uppercase;
-}
-
+/* Cards */
 .gluni-preview-card {
-  margin: 0.7rem 0;
-  padding: 0.75rem;
-  border: 1px solid rgba(244, 196, 97, 0.18);
-  border-radius: 13px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)), rgba(0, 0, 0, 0.16);
+  margin: 0.6rem 0;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--gluni-border-soft);
+  border-radius: 6px;
 }
 
-.gluni-preview-card h3,
-.gluni-preview-card p {
+.gluni-preview-card h3 {
   margin-top: 0;
 }
 
@@ -380,30 +244,30 @@
   margin-bottom: 0;
 }
 
-.gluni-ability-row span {
-  background: rgba(95, 42, 32, 0.62);
-}
-
+/* Notices */
 .gluni-notice {
-  margin: 0.45rem 0;
-  padding: 0.55rem 0.65rem;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.2);
+  margin: 0.4rem 0;
+  padding: 0.4rem 0.6rem;
+  border-left: 3px solid var(--gluni-border);
+  border-radius: 4px;
+  background: var(--gluni-fill);
 }
 
 .gluni-warning {
-  color: var(--gluni-warning);
+  border-left-color: #c9a227;
 }
 
 .gluni-error {
-  color: var(--gluni-error);
-  font-weight: 750;
+  border-left-color: #c0392b;
+  font-weight: bold;
 }
 
+/* Lists */
 .gluni-validation-list,
 .gluni-named-list {
-  display: grid;
-  gap: 0.38rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -411,10 +275,9 @@
 
 .gluni-validation-list li,
 .gluni-named-list li {
-  padding: 0.45rem 0.55rem;
-  border: 1px solid rgba(244, 196, 97, 0.14);
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.14);
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--gluni-border-soft);
+  border-radius: 4px;
 }
 
 .gluni-named-list li {
@@ -425,96 +288,48 @@
 }
 
 .gluni-named-list span {
-  color: var(--gluni-muted);
-  font-size: 0.82rem;
-  text-align: right;
+  font-size: 0.8rem;
+  opacity: 0.7;
 }
 
-.gluni-validation-card .gluni-validation-list:not(.gluni-warning):not(.gluni-error) li {
-  border-color: rgba(124, 194, 125, 0.24);
-  color: var(--gluni-green);
+.gluni-muted {
+  opacity: 0.7;
 }
 
+/* Empty preview */
 .gluni-empty-preview {
-  display: grid;
-  place-items: center;
-  align-content: center;
-  min-height: 460px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 100%;
   text-align: center;
-  color: var(--gluni-muted);
+  opacity: 0.7;
 }
 
 .gluni-empty-preview i {
-  display: grid;
-  place-items: center;
-  width: 4.25rem;
-  height: 4.25rem;
-  margin-bottom: 0.75rem;
-  border: 1px solid var(--gluni-border-strong);
-  border-radius: 999px;
-  color: var(--gluni-gold);
-  background: rgba(244, 196, 97, 0.08);
-  font-size: 1.75rem;
+  font-size: 2rem;
+  opacity: 0.6;
 }
 
-.gluni-empty-preview h2,
+.gluni-empty-preview h2 {
+  margin: 0;
+  border: none;
+}
+
 .gluni-empty-preview p {
+  max-width: 24rem;
   margin: 0;
 }
 
-.gluni-empty-preview p {
-  max-width: 28rem;
-  margin-top: 0.35rem;
-}
-
+/* Actor directory button */
 .gluni-actor-directory-button {
-  margin: 0.35rem;
+  margin: 0.25rem;
 }
 
-@media (max-width: 980px) {
-  .gluniverse-pf2e-importer {
-    min-width: 320px;
-  }
-
-  .gluni-pf2e-importer {
+@media (max-width: 760px) {
+  .gluni-body {
     grid-template-columns: 1fr;
-    min-height: 620px;
-  }
-
-  .gluni-import-hero {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .gluni-rule-helper {
-    grid-template-columns: 1fr;
-  }
-
-  .gluni-options-panel label {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 560px) {
-  .gluni-pf2e-importer {
-    padding: 0.6rem;
-  }
-
-  .gluni-import-hero,
-  .gluni-panel,
-  .gluni-preview {
-    border-radius: 12px;
-  }
-
-  .gluni-target-row button,
-  .gluni-target-row select,
-  .gluni-import-actions button {
-    flex: 1 1 100%;
-  }
-
-  .gluni-stat-table th,
-  .gluni-stat-table td {
-    display: block;
-    width: 100%;
   }
 }

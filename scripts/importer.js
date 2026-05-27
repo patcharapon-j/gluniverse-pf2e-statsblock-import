@@ -61,13 +61,19 @@ Hooks.once("ready", () => {
 Hooks.on("renderActorDirectory", (_app, html) => {
   if (!game.user?.isGM || game.system.id !== "pf2e") return;
   const root = html instanceof HTMLElement ? html : html?.[0];
-  if (!root || root.querySelector(".gluni-actor-directory-button")) return;
+  if (!root) return;
+  let footer = root.querySelector(".directory-footer");
+  if (!footer) {
+    footer = document.createElement("footer");
+    footer.className = "directory-footer action-buttons flexrow";
+    root.append(footer);
+  }
+  if (footer.querySelector(".gluni-actor-directory-button")) return;
   const button = document.createElement("button");
   button.type = "button";
   button.className = "gluni-actor-directory-button";
   button.innerHTML = '<i class="fa-solid fa-file-import"></i> Import PF2e NPC';
   button.addEventListener("click", () => new PF2EStatBlockImporter().render({ force: true }));
-  const footer = root.querySelector(".directory-footer") ?? root;
   footer.append(button);
 });
 

@@ -323,13 +323,6 @@
   margin: 0;
 }
 
-/* Actor directory button */
-.gluni-actor-directory-button {
-  flex: 0 0 auto;
-  width: auto;
-  margin: 0.25rem 0.25rem 0.25rem auto;
-}
-
 @media (max-width: 760px) {
   .gluni-body {
     grid-template-columns: 1fr;

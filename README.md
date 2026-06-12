@@ -40,6 +40,17 @@ https://github.com/patcharapon-j/gluniverse-pf2e-statsblock-import/releases/late
 
 The strict format and hazard/loose handling are documented in `docs/LLM_STATBLOCK_FORMAT.md`.
 
+## Look & Feel
+
+The importer uses the GL Universe **"Etched Glass"** design language — frosted glass
+panels with an Endfield-style drafting layer (chamfered corners, L-bracket
+registration marks, precision rules, micro-tracked technical labels, and a dynamic
+accent that shifts cyan for NPCs and signal amber for hazards).
+
+A client-side **Animation Level** setting (Module Settings → Reduced / Default /
+Cinematic) controls motion intensity, and motion is automatically clamped when the
+operating system requests reduced motion.
+
 ## Update Modes
 
 - **Replace matching imported items** replaces only imported items with matching type/name slugs.

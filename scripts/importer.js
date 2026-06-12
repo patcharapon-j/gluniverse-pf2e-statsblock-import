@@ -76,6 +76,18 @@ Hooks.once("init", () => {
     type: PF2EStatBlockImporter,
     restricted: true
   });
+
+  // Etched Glass motion tiers (§6.4 of the GL Universe design language).
+  game.settings.register(MODULE_ID, "motionTier", {
+    name: "Animation Level",
+    hint: "Etched Glass motion intensity. Cinematic adds flourish; Reduced keeps only essential transitions. Forced to Reduced when the OS requests reduced motion.",
+    scope: "client",
+    config: true,
+    type: String,
+    choices: { reduced: "Reduced", default: "Default", cinematic: "Cinematic" },
+    default: "default",
+    onChange: () => Object.values(ui.windows ?? {}).forEach((app) => app instanceof PF2EStatBlockImporter && app.render({ force: false }))
+  });
 });
 
 Hooks.once("ready", () => {
@@ -149,6 +161,7 @@ class PF2EStatBlockImporter extends foundry.applications.api.ApplicationV2 {
   async _onRender(context, options) {
     await super._onRender(context, options);
     const root = this.element;
+    this.#applyMotionTier(root);
     root.querySelector("textarea[name='source']")?.addEventListener("input", (event) => {
       this.#source = event.currentTarget.value;
     });
@@ -166,14 +179,30 @@ class PF2EStatBlockImporter extends foundry.applications.api.ApplicationV2 {
     });
   }
 
+  #applyMotionTier(root) {
+    const node = root?.closest?.(".application") ?? root;
+    if (!node) return;
+    const tier = game.settings.get(MODULE_ID, "motionTier") ?? "default";
+    node.classList.remove("gl-motion-reduced", "gl-motion-default", "gl-motion-cinematic");
+    node.classList.add(`gl-motion-${tier}`);
+  }
+
   #renderAppHtml() {
     const actors = game.actors.filter((actor) => ["npc", "hazard"].includes(actor.type)).sort((a, b) => a.name.localeCompare(b.name));
     const actorOptions = actors.map((actor) => `<option value="${escapeHtml(actor.id)}" ${this.#targetActorId === actor.id ? "selected" : ""}>${escapeHtml(actor.name)}</option>`).join("");
     const modeOptions = Object.entries(IMPORT_MODES).map(([value, label]) => `<option value="${value}" ${this.#updateMode === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("");
     return `
       <header class="gluni-header">
-        <h1><i class="fa-solid fa-file-import"></i> PF2e NPC Stat Block Importer</h1>
-        <p class="gluni-subtitle">Paste strict Markdown, validate PF2e data, then create, update, or export NPC actors.</p>
+        <div class="gluni-header-main">
+          <p class="gluni-kicker">GL UNIVERSE // STAT BLOCK INTAKE</p>
+          <h1><i class="fa-solid fa-file-import"></i> PF2e NPC Stat Block Importer</h1>
+          <p class="gluni-subtitle">Paste strict Markdown, validate PF2e data, then create, update, or export NPC actors.</p>
+        </div>
+        <div class="gluni-meta">
+          <span class="gluni-serial">GLU·SB // INTAKE·0001</span>
+          <span class="gluni-cmyk" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+          <span class="gluni-data-strip" aria-hidden="true"></span>
+        </div>
       </header>
       <div class="gluni-body">
         <section class="gluni-input">
@@ -985,9 +1014,10 @@ function buildSpellLocation(spell, entryId) {
 }
 
 function renderPreview(parsed, validation = null) {
-  if (!parsed) return `<div class="gluni-empty-preview"><i class="fa-solid fa-scroll"></i><h2>No preview yet</h2><p>Paste a strict Markdown stat block and click <strong>Parse Preview</strong>.</p></div>`;
+  if (!parsed) return `<div class="gluni-empty-preview" data-kind="standby"><i class="fa-solid fa-scroll"></i><h2>STANDBY</h2><p>Paste a strict Markdown stat block and click <strong>Parse Preview</strong>.</p></div>`;
   const { npc, warnings, errors } = parsed;
   const actorType = resolveActorType(npc);
+  const serial = `${actorType === "hazard" ? "HZD" : "NPC"}·LV / ${String(npc.level ?? 0).padStart(2, "0")}`;
   const chips = (values) => `<span class="gluni-chip-list">${values.map((v) => `<span class="gluni-chip">${escapeHtml(v)}</span>`).join("")}</span>`;
   const hazardCard = actorType === "hazard" ? `
     <div class="gluni-preview-card">
@@ -996,8 +1026,9 @@ function renderPreview(parsed, validation = null) {
       ${npc.hazard.disable ? `<p><strong>Disable:</strong> ${escapeHtml(npc.hazard.disable)}</p>` : ""}
     </div>` : "";
   return `
+    <div class="gluni-preview-inner" data-kind="${actorType}">
     <div class="gluni-preview-title">
-      <p class="gluni-eyebrow">Parsed Preview — ${actorType === "hazard" ? "Hazard" : "NPC"}</p>
+      <p class="gluni-eyebrow">Parsed Preview — ${actorType === "hazard" ? "Hazard" : "NPC"} <span class="gluni-serial">${serial}</span></p>
       <h2>${escapeHtml(npc.name || "Unnamed")}</h2>
     </div>
     ${errors.map((error) => `<p class="gluni-notice gluni-error">${escapeHtml(error)}</p>`).join("")}
@@ -1030,6 +1061,7 @@ function renderPreview(parsed, validation = null) {
     ${renderNamedList("Actions", npc.actions)}
     ${renderNamedList("Spellcasting", npc.spellcasting)}
     ${renderNamedList("Effects", npc.effects)}
+    </div>
   `;
 }
 

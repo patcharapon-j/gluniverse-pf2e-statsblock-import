@@ -1404,8 +1404,33 @@ function parseDamageRolls(value, warnings = [], attackName = "attack") {
 
 function parseFrequency(value) {
   const max = parseSignedInt(value) || 1;
-  const per = value.match(/per\s+(round|minute|hour|day)/i)?.[1]?.toLowerCase() ?? "day";
-  return { max, value: max, per };
+
+  const raw = value
+    .match(
+      /per\s+(turn|round|minute|10 minutes?|hour|24 hours?|day|week|month|year)/i
+    )?.[1]
+    ?.toLowerCase() ?? "day";
+
+  const frequencyMap = {
+    turn: "turn",
+    round: "round",
+    minute: "PT1M",
+    "10 minute": "PT10M",
+    "10 minutes": "PT10M",
+    hour: "PT1H",
+    "24 hour": "PT24H",
+    "24 hours": "PT24H",
+    day: "day",
+    week: "P1W",
+    month: "P1M",
+    year: "P1Y"
+  };
+
+  return {
+    max,
+    value: max,
+    per: frequencyMap[raw] ?? "day"
+  };
 }
 
 function parseDuration(value) {

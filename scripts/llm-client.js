@@ -131,7 +131,7 @@ export async function testLlmConnection(settings, { signal, timeoutMs = 20000 } 
   const response = await requestLlm(settings, {
     system: "You are a connection test. Do not explain.",
     user: "Reply with exactly OK."
-  }, { signal, timeoutMs, maxTokens: 16, enableThinking: false });
+  }, { signal, timeoutMs, maxTokens: 64, enableThinking: false });
   if (!response.text.trim()) throw new Error("LLM returned an empty test response.");
   return response;
 }

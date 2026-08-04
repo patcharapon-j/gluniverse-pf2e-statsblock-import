@@ -1,3 +1,12 @@
+import {
+  DEFAULT_LLM_SETTINGS,
+  LLM_SETTING_KEYS,
+  formatStatBlockWithLlm,
+  getLlmSettings,
+  testLlmConnection,
+  validateLlmSettings
+} from "./llm-client.js";
+
 const MODULE_ID = "gluniverse-pf2e-statsblock-import";
 const IMPORT_FOLDER = "Imported NPCs";
 const FLAG_SOURCE = "sourceMarkdown";
@@ -68,6 +77,8 @@ function getRuleElementKeys() {
 }
 
 Hooks.once("init", () => {
+  registerLlmSettings();
+
   game.settings.registerMenu(MODULE_ID, "openImporter", {
     name: "PF2e Stat Block Importer",
     label: "Open Importer",
@@ -89,6 +100,140 @@ Hooks.once("init", () => {
     onChange: () => Object.values(ui.windows ?? {}).forEach((app) => app instanceof PF2EStatBlockImporter && app.render({ force: false }))
   });
 });
+
+Hooks.on("renderSettingsConfig", (_app, html) => {
+  attachLlmSettingsTestButton(html);
+});
+
+function registerLlmSettings() {
+  const register = (key, data) => game.settings.register(MODULE_ID, key, {
+    scope: "client",
+    config: true,
+    requiresReload: false,
+    onChange: () => Hooks.callAll(`${MODULE_ID}.llmSettingsChanged`),
+    ...data
+  });
+
+  register(LLM_SETTING_KEYS.protocol, {
+    name: "LLM Protocol",
+    hint: "Choose OpenAI-compatible Chat Completions or Claude Messages protocol.",
+    type: String,
+    choices: { openai: "OpenAI-compatible", claude: "Claude" },
+    default: DEFAULT_LLM_SETTINGS.protocol
+  });
+  register(LLM_SETTING_KEYS.endpoint, {
+    name: "LLM Endpoint",
+    hint: "Base URL (root, /api, /openai, or /v1) or full endpoint. Browser CORS permission is required.",
+    type: String,
+    default: DEFAULT_LLM_SETTINGS.endpoint
+  });
+  register(LLM_SETTING_KEYS.apiKey, {
+    name: "LLM API Key",
+    hint: "Stored in this client only; not an encrypted secret store. Leave empty for endpoints without authentication.",
+    type: String,
+    default: DEFAULT_LLM_SETTINGS.apiKey
+  });
+  register(LLM_SETTING_KEYS.model, {
+    name: "LLM Model",
+    hint: "Model identifier accepted by the selected endpoint.",
+    type: String,
+    default: DEFAULT_LLM_SETTINGS.model
+  });
+}
+
+function attachLlmSettingsTestButton(html) {
+  const root = html?.querySelector ? html : html?.[0];
+  if (!root?.querySelector) return;
+
+  const findSettingInput = (key) => root.querySelector(`[name="${MODULE_ID}.${key}"]`) ?? root.querySelector(`[data-setting-id="${MODULE_ID}.${key}"] input`);
+  const endpointInput = findSettingInput(LLM_SETTING_KEYS.endpoint);
+  const modelInput = findSettingInput(LLM_SETTING_KEYS.model);
+  const apiKeyInput = findSettingInput(LLM_SETTING_KEYS.apiKey);
+  const protocolInput = findSettingInput(LLM_SETTING_KEYS.protocol);
+  if (!endpointInput || !modelInput || !apiKeyInput || !protocolInput) return;
+
+  apiKeyInput.type = "password";
+  apiKeyInput.autocomplete = "off";
+  if (root.querySelector("button[data-action='testLlm']")) return;
+
+  const fields = modelInput.closest(".form-fields") ?? modelInput.parentElement;
+  if (!fields) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "gluni-llm-test-button icon";
+  button.dataset.action = "testLlm";
+  button.title = "Test LLM connection";
+  button.setAttribute("aria-label", "Test LLM connection");
+  button.innerHTML = '<i class="fa-solid fa-plug"></i>';
+  fields.append(button);
+
+  button.addEventListener("click", async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (button.disabled) return;
+    const settings = {
+      protocol: protocolInput.value,
+      endpoint: endpointInput.value,
+      apiKey: apiKeyInput.value,
+      model: modelInput.value
+    };
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    button.classList.add("is-busy");
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+    try {
+      const result = await testLlmConnection(settings);
+      ui.notifications.info(`LLM connection OK (HTTP ${result.status}).`);
+    } catch (error) {
+      ui.notifications.error(formatLlmError(error));
+    } finally {
+      button.disabled = false;
+      button.setAttribute("aria-busy", "false");
+      button.classList.remove("is-busy");
+      button.innerHTML = '<i class="fa-solid fa-plug"></i>';
+    }
+  });
+}
+
+function formatLlmError(error) {
+  const message = String(error?.message ?? error ?? "Unknown LLM error");
+  if (/failed to fetch|networkerror|cors|mixed content/i.test(message)) {
+    return "LLM request failed. Check endpoint, CORS, HTTPS, and network access.";
+  }
+  return message.slice(0, 500);
+}
+
+let llmFormatGuidePromise = null;
+
+async function loadLlmFormatGuide() {
+  if (!llmFormatGuidePromise) {
+    llmFormatGuidePromise = (async () => {
+      const urls = [];
+      try {
+        urls.push(new URL("../docs/LLM_STATBLOCK_FORMAT.md", import.meta.url).href);
+      } catch (_error) {
+        // Fallback below handles environments without import.meta URL support.
+      }
+      const modulePath = game.modules.get(MODULE_ID)?.path;
+      if (modulePath) urls.push(`${String(modulePath).replace(/\/$/, "")}/docs/LLM_STATBLOCK_FORMAT.md`);
+      let lastError = null;
+      for (const url of [...new Set(urls)]) {
+        try {
+          const response = await globalThis.fetch(url);
+          if (response.ok) return response.text();
+          lastError = new Error(`Guide request failed (${response.status}).`);
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError ?? new Error("Could not load docs/LLM_STATBLOCK_FORMAT.md.");
+    })().catch((error) => {
+      llmFormatGuidePromise = null;
+      throw error;
+    });
+  }
+  return llmFormatGuidePromise;
+}
 
 Hooks.once("ready", () => {
   if (game.system.id !== "pf2e") {
@@ -142,6 +287,8 @@ class PF2EStatBlockImporter extends foundry.applications.api.ApplicationV2 {
   #validation = null;
   #updateMode = "replaceMatching";
   #targetActorId = null;
+  #llmBusy = false;
+  #llmAbortController = null;
 
   setTargetActor(actorId) {
     this.#targetActorId = actorId;
@@ -158,6 +305,11 @@ class PF2EStatBlockImporter extends foundry.applications.api.ApplicationV2 {
     element.replaceChildren(result);
   }
 
+  async _onClose(options) {
+    this.#llmAbortController?.abort();
+    return super._onClose(options);
+  }
+
   async _onRender(context, options) {
     await super._onRender(context, options);
     const root = this.element;
@@ -170,6 +322,7 @@ class PF2EStatBlockImporter extends foundry.applications.api.ApplicationV2 {
       this.#source = sampleStatBlock();
       this.#parseAndRender();
     });
+    root.querySelector("button[data-action='aiFormat']")?.addEventListener("click", () => this.#formatWithLlm());
     root.querySelector("button[data-action='create']")?.addEventListener("click", () => this.#createActor());
     root.querySelector("button[data-action='update']")?.addEventListener("click", () => this.#updateActor());
     root.querySelector("button[data-action='export']")?.addEventListener("click", () => this.#exportSelectedActor());
@@ -213,6 +366,7 @@ class PF2EStatBlockImporter extends foundry.applications.api.ApplicationV2 {
           <div class="gluni-actions">
             <button class="gluni-primary" type="button" data-action="parse"><i class="fa-solid fa-magnifying-glass-chart"></i> Parse Preview</button>
             <button type="button" data-action="sample"><i class="fa-solid fa-wand-magic-sparkles"></i> Load Sample</button>
+            <button type="button" data-action="aiFormat" title="Format source with configured LLM" aria-label="Format source with configured LLM" ${this.#llmBusy ? "disabled aria-busy=\"true\"" : ""}><i class="fa-solid fa-sparkles"></i> AI Format</button>
           </div>
 
           <label class="gluni-field">
@@ -254,6 +408,64 @@ class PF2EStatBlockImporter extends foundry.applications.api.ApplicationV2 {
     this.#parsed = parseStrictMarkdown(this.#source);
     this.#validation = await validateParsed(this.#parsed);
     this.render({ force: true });
+  }
+
+  async #formatWithLlm() {
+    if (this.#llmBusy) return;
+    const textarea = this.element?.querySelector("textarea[name='source']");
+    this.#source = textarea?.value ?? this.#source;
+    if (!this.#source.trim()) {
+      ui.notifications.warn("Paste source Markdown before using AI Format.");
+      return;
+    }
+
+    const settings = getLlmSettings(MODULE_ID);
+    const settingErrors = validateLlmSettings(settings);
+    if (settingErrors.length) {
+      ui.notifications.warn(`Configure LLM settings first. ${settingErrors.join(" ")}`);
+      return;
+    }
+
+    const button = this.element?.querySelector("button[data-action='aiFormat']");
+    const original = this.#source;
+    this.#llmBusy = true;
+    this.#llmAbortController = new AbortController();
+    this.#setLlmButtonBusy(button, true);
+    try {
+      const guide = await loadLlmFormatGuide();
+      const formatted = await formatStatBlockWithLlm(settings, {
+        guide,
+        source: original,
+        signal: this.#llmAbortController.signal
+      });
+      if (this.#llmAbortController.signal.aborted) return;
+      const liveSource = this.element?.querySelector("textarea[name='source']")?.value;
+      if (liveSource !== original) {
+        ui.notifications.warn("Source changed while AI formatting; result discarded.");
+        return;
+      }
+      this.#source = formatted;
+      const outputTextarea = this.element?.querySelector("textarea[name='source']");
+      if (outputTextarea) outputTextarea.value = formatted;
+      await this.#parseAndRender();
+      ui.notifications.info("AI format completed. Parse Preview refreshed.");
+    } catch (error) {
+      if (!this.#llmAbortController?.signal.aborted) ui.notifications.error(formatLlmError(error));
+    } finally {
+      this.#llmBusy = false;
+      this.#llmAbortController = null;
+      this.#setLlmButtonBusy(this.element?.querySelector("button[data-action='aiFormat']"), false);
+    }
+  }
+
+  #setLlmButtonBusy(button, busy) {
+    if (!button) return;
+    button.disabled = busy;
+    button.setAttribute("aria-busy", String(busy));
+    button.classList.toggle("is-busy", busy);
+    button.innerHTML = busy
+      ? '<i class="fa-solid fa-spinner fa-spin"></i> AI Formatting'
+      : '<i class="fa-solid fa-sparkles"></i> AI Format';
   }
 
   async #createActor() {

@@ -431,6 +431,27 @@
 
 .gluni-importer button:disabled::after { display: none; }
 
+.gluni-importer button[data-action="aiFormat"].is-busy {
+  border-color: color-mix(in srgb, var(--gl-cyan) 65%, var(--gl-edge));
+  color: var(--gl-cyan);
+}
+
+.gluni-importer button[data-action="aiFormat"].is-busy i {
+  color: var(--gl-cyan);
+}
+
+/* The settings page is owned by Foundry, so keep its test control compact. */
+.gluni-llm-test-button {
+  min-width: 2.2rem;
+  min-height: 2.2rem;
+  margin-left: 0.35rem;
+  align-self: center;
+}
+
+.gluni-llm-test-button.is-busy {
+  pointer-events: none;
+}
+
 /* Primary buttons — opaque signal decal (§2.4 signal rule) */
 .gluni-primary {
   color: var(--gl-ink-0) !important;
